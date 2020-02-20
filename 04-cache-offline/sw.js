@@ -23,6 +23,7 @@ self.addEventListener( 'install', e => {
 			'/index.html',
 			'/css/style.css',
 			'/img/main.jpg',
+			'/img/no-img.jpg',
 			'/js/app.js'
 		] )
 	);
@@ -39,10 +40,10 @@ self.addEventListener( 'install', e => {
 } );
 
 self.addEventListener( 'fetch', e => {
-	// Cache only
+	// 1) Cache only
 	// e.respondWith(caches.match(e.request));
 
-	// Cache with network fallback
+	// 2) Cache with network fallback
 	/*const cacheRes = caches.match( e.request )
 	 .then( res => {
 	 if ( res ) {
@@ -63,7 +64,7 @@ self.addEventListener( 'fetch', e => {
 
 	 e.respondWith( cacheRes );*/
 
-	// Network with cache fallback
+	// 3) Network with cache fallback
 	/*const res = fetch( e.request ).then( res => {
 	 if (!res) return caches.match(e.request);
 
@@ -79,19 +80,44 @@ self.addEventListener( 'fetch', e => {
 
 	 e.respondWith(res);*/
 
-	// Cache with network update
+	// 4) Cache with network update
+	/*if (e.request.url.includes('bootstrap')) {
+	 return e.respondWith(caches.match(e.request));
+	 }
 
-	if (e.request.url.includes('bootstrap')) {
-		return e.respondWith(caches.match(e.request));
-	}
+	 const res = caches.open( CACHE_STATIC_NAME ).then( cache => {
+	 fetch( e.request ).then( newRes => cache.put( e.request, newRes ) );
 
-	const res = caches.open( CACHE_STATIC_NAME ).then( cache => {
-		fetch( e.request ).then( newRes => cache.put( e.request, newRes ) );
+	 return cache.match( e.request );
+	 } );
 
-		return cache.match( e.request );
+	 e.respondWith( res );*/
+
+	// 5) Cache & Network Race
+	const res = new Promise( ( resolve, reject ) => {
+		let rejected = false;
+
+		const failedOnce = () => {
+			if ( rejected ) {
+				if (/\.(png|jpg)$/i.test(e.request.url)) {
+					resolve(caches.match('/img/no-img.jpg'))
+				} else {
+					reject('No se encontró respuesta');
+				}
+			} else {
+				rejected = true;
+			}
+		};
+
+		fetch( e.request ).then( res => {
+			res.ok ? resolve( res ) : failedOnce();
+		} ).catch( failedOnce );
+
+		caches.match( e.request ).then( res => {
+			res ? resolve( res ) : failedOnce();
+		} ).catch( failedOnce );
 	} );
 
 	e.respondWith( res );
-
 } );
 
